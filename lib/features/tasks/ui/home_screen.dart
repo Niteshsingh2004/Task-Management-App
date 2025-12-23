@@ -24,6 +24,85 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<TaskBloc>().add(LoadTasks());
   }
 
+  List<Widget> _buildGroupedTaskList(List<TaskModel> tasks) {
+    if (tasks.isEmpty) return [];
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    tasks.sort((a, b) {
+      final dateA = DateTime(a.dueDate.year, a.dueDate.month, a.dueDate.day);
+      final dateB = DateTime(b.dueDate.year, b.dueDate.month, b.dueDate.day);
+
+      // --- 1. Today ko sabse upar rakho ---
+      bool isAToday = dateA == today;
+      bool isBToday = dateB == today;
+
+      if (isAToday && !isBToday) return -1;
+      if (!isAToday && isBToday) return 1;
+      int dateComp = dateB.compareTo(dateA);
+
+      if (dateComp != 0) return dateComp;
+      return _getPriorityValue(
+        a.priority,
+      ).compareTo(_getPriorityValue(b.priority));
+    });
+
+    List<Widget> widgets = [];
+    String? lastHeader;
+
+    for (var task in tasks) {
+      String header = _getDateHeader(task.dueDate);
+
+      if (header != lastHeader) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 20, bottom: 10),
+            child: Text(
+              header,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+        );
+        lastHeader = header;
+      }
+
+      widgets.add(_buildTaskTile(task));
+    }
+
+    return widgets;
+  }
+
+  int _getPriorityValue(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'high':
+        return 0;
+      case 'medium':
+        return 1;
+      case 'low':
+        return 2;
+      default:
+        return 3;
+    }
+  }
+
+  String _getDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final yesterday = today.subtract(const Duration(days: 1));
+    final taskDate = DateTime(date.year, date.month, date.day);
+
+    if (taskDate == today) return "Today";
+    if (taskDate == tomorrow) return "Tomorrow";
+    if (taskDate == yesterday) return "Yesterday";
+    return DateFormat('EEE, d MMM').format(date);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -101,14 +180,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Container(
                           color: Colors.white.withOpacity(0.2),
                           child: TextField(
-                            style: TextStyle(color: Colors.blueGrey),
+                            style: const TextStyle(color: Colors.white),
                             onChanged: (value) {
                               context.read<TaskBloc>().add(SearchTasks(value));
                             },
-                            decoration: InputDecoration(
+                            decoration: const InputDecoration(
                               border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
                               prefixIcon: Icon(
                                 Icons.search,
                                 color: Colors.grey,
@@ -128,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
 
                 Expanded(
                   child: BlocBuilder<TaskBloc, TaskState>(
@@ -150,26 +227,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           );
                         }
+
                         return ListView(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 20,
                             vertical: 10,
                           ),
-                          children: [
-                            const Text(
-                              "Today",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 15),
-                            ...state.tasks
-                                .map((task) => _buildTaskTile(task))
-                                .toList(),
-                          ],
+                          children: _buildGroupedTaskList(state.tasks),
                         );
                       }
+
                       if (state is TaskError) {
                         return Center(
                           child: Text(
@@ -265,75 +332,98 @@ class _HomeScreenState extends State<HomeScreen> {
                         : null,
                   ),
                 ),
-                Text(
-                  task.description,
-                  style: TextStyle(color: Colors.grey[500], fontSize: 13),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  DateFormat('h:mm a').format(task.dueDate),
-                  style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                if (task.description.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    task.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.access_time_rounded,
+                      size: 14,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      DateFormat('h:mm a').format(task.dueDate),
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: _getPriorityColor(task.priority),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              task.priority.toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AddEditTaskScreen(task: task),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
                 ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                shape: BoxShape.circle,
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: _getPriorityColor(task.priority),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  task.priority.toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-              child: const Icon(
-                Icons.edit_outlined,
-                size: 18,
-                color: Colors.blueAccent,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AddEditTaskScreen(task: task),
+                      ),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.edit_outlined,
+                        size: 16,
+                        color: Colors.blueAccent,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () =>
+                        context.read<TaskBloc>().add(DeleteTask(task.id)),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        size: 16,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          InkWell(
-            onTap: () => context.read<TaskBloc>().add(DeleteTask(task.id)),
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.red[50],
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.delete_outline,
-                size: 18,
-                color: Colors.redAccent,
-              ),
-            ),
+            ],
           ),
         ],
       ),
