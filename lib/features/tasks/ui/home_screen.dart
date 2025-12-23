@@ -180,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Container(
                           color: Colors.white.withOpacity(0.2),
                           child: TextField(
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Colors.grey),
                             onChanged: (value) {
                               context.read<TaskBloc>().add(SearchTasks(value));
                             },
